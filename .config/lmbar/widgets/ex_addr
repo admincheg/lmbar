@@ -1,0 +1,28 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["E"]="ex_addr.parse"
+
+w_ex_addr=""
+
+ex_addr.parse() {
+  data=$1; shift
+  w_ex_addr=${data}
+}
+
+ex_addr.run() {
+  while :; do
+    addr=$(curl -s ifconfig.co)
+    echo "E${addr}" > "${FIFO_PIPE}"
+    sleep 3600
+  done
+}

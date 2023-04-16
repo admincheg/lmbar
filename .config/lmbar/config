@@ -1,0 +1,57 @@
+DEBUG=0
+
+WIDGETS=( bspwm battery date addr bandwise la ex_addr memory sensors fs )
+
+DELIM_LEFT="%{T2}%{T1}"
+DELIM_RIGHT="%{T2}%{T1}"
+
+BSPWM_DESKS_DELIM="${DELIM_LEFT}"
+
+COLOR_BSPWM_DESKS_INACTIVE="ff3a3d3f"
+COLOR_BSPWM_DESKS_ACTIVE="ff9bafb7"
+COLOR_BSPWM_TITLE_FG="ffb1ccbd"
+COLOR_BSPWM_TITLE_BG="ff555a5d"
+
+COLOR_DATE_D_FG="ffb1ccbd"
+COLOR_DATE_D_BG="ff262c35"
+COLOR_DATE_T_FG="ff1a1c27"
+COLOR_DATE_T_BG="ff7798aa"
+
+COLOR_STATS_FG="ff9da4a6"
+COLOR_STATS_BG="ff465158"
+
+COLOR_ADDR_FG="ff1a1c27"
+COLOR_ADDR_BG="ff7798aa"
+
+BANDWISE_MULT="M" # Mbps
+FS=( '/' )
+
+if [[ ${HOSTNAME} == "vail" ]]; then
+  MONITORS=( DP-0 DP-2 )
+  IFNAMES=( enp9s0 )
+
+  TEMPLATE_DP_0="%{F#\${COLOR_BSPWM_DESKS_ACTIVE} B#\${COLOR_BSPWM_DESKS_INACTIVE}}%{A:power shutdown:}  %{A}%{A:power reboot:} %{A}\${w_bspwm_desks_m[DP-0]}%{F#\${COLOR_BSPWM_DESKS_INACTIVE} B-}\${DELIM_LEFT}%{F-}%{r}%{F#\${COLOR_STATS_BG} B-}\${DELIM_RIGHT}%{F#\${COLOR_STATS_FG} B#\${COLOR_STATS_BG}} 力 \${w_fs_used_perc_m[/]}   \${w_memory_used} ﬙ \${w_la_1m}  \${w_sensors_core} %{F#\${COLOR_DATE_D_BG} B#\${COLOR_STATS_BG}}\${DELIM_RIGHT}%{F#\${COLOR_DATE_D_FG} B#\${COLOR_DATE_D_BG}}  \${w_date_d} %{F#\${COLOR_DATE_T_BG} B#\${COLOR_DATE_D_BG}}\${DELIM_RIGHT}%{F#\${COLOR_DATE_T_FG} B#\${COLOR_DATE_T_BG}}  \${w_date_t} %{F- B-}"
+  TEMPLATE_DP_2="\${w_bspwm_desks_m[DP-2]}%{F#\${COLOR_BSPWM_DESKS_INACTIVE} B#\${COLOR_ADDR_BG}}\${DELIM_LEFT} %{F#\${COLOR_ADDR_FG}} %{A:echo "\$w_ex_addr" | xclip:}\$w_ex_addr%{A}  %{A:echo "\${w_addr_m[enp9s0]}" | xclip:}\${w_addr_m[enp9s0]}%{A} %{F#\${COLOR_ADDR_BG} B-}\${DELIM_LEFT}%{F-}%{r}%{F#\${COLOR_STATS_BG} B-}\${DELIM_RIGHT}%{F#\${COLOR_STATS_FG} B#\${COLOR_STATS_BG}}  \${w_bandwise_diff_tx_m[enp9s0]}  \${w_bandwise_diff_rx_m[enp9s0]} %{F#\${COLOR_DATE_D_BG} B#\${COLOR_STATS_BG}}\${DELIM_RIGHT}%{F#\${COLOR_DATE_D_FG} B#\${COLOR_DATE_D_BG}}  \${w_date_d} %{F#\${COLOR_DATE_T_BG} B#\${COLOR_DATE_D_BG}}\${DELIM_RIGHT}%{F#\${COLOR_DATE_T_FG} B#\${COLOR_DATE_T_BG}}  \${w_date_t} %{F- B-}"
+elif [[ ${HOSTNAME} == "kraken" ]]; then
+  #MONITORS=( eDP-1 )
+  MONITORS=( $(xrandr | awk '/ connected/ {print $1}') )
+  IFNAMES=( wlan0 )
+
+  TEMPLATE="%{F#\${COLOR_BSPWM_DESKS_ACTIVE} B#\${COLOR_BSPWM_DESKS_INACTIVE}}\${w_bspwm_desks_m[eDP1]}%{F#\${COLOR_BSPWM_DESKS_INACTIVE} B#\${COLOR_ADDR_BG}}\${DELIM_LEFT} %{F#\${COLOR_ADDR_FG}} %{A:echo -n "\${w_ex_addr}" \| xclip:}\${w_ex_addr}%{A}  %{A:echo -n "\${w_addr_m[wlan0]}" \| xclip:}\${w_addr_m[wlan0]}%{A} %{F#\${COLOR_ADDR_BG} B-}\${DELIM_LEFT}%{F-}%{r}%{F#\${COLOR_STATS_BG} B-}\${DELIM_RIGHT}%{F#\${COLOR_STATS_FG} B#\${COLOR_STATS_BG}} \${w_battery_status_m[BAT0]} \${w_battery_perc_m[BAT0]} 力 \${w_fs_used_perc_m[/]}   \${w_memory_used} ﬙ \${w_la_1m}  \${w_sensors_core} %{F#\${COLOR_DATE_D_BG} B#\${COLOR_STATS_BG}}\${DELIM_RIGHT}%{F#\${COLOR_DATE_D_FG} B#\${COLOR_DATE_D_BG}}  \${w_date_d} %{F#\${COLOR_DATE_T_BG} B#\${COLOR_DATE_D_BG}}\${DELIM_RIGHT}%{F#\${COLOR_DATE_T_FG} B#\${COLOR_DATE_T_BG}}  \${w_date_t} %{F- B-}"
+  TEMPLATE_eDP1=${TEMPLATE}
+  TEMPLATE_DP1=${TEMPLATE//eDP1/DP1}
+  TEMPLATE_DP1_1=${TEMPLATE//eDP1/DP1-1}
+  TEMPLATE_DP1_2=${TEMPLATE//eDP1/DP1-2}
+elif [[ ${HOSTNAME} == "pepe" ]]; then
+  MONITORS=( eDP $(xrandr | awk '/ connected/ {print $1}' | grep -v eDP | sort) )
+  IFNAMES=( wlan0 )
+
+  TEMPLATE="%{F#\${COLOR_BSPWM_DESKS_ACTIVE} B-}\${w_bspwm_desks_m[eDP]}%{F#\${COLOR_BSPWM_DESKS_INACTIVE} B#\${COLOR_ADDR_BG}}\${DELIM_LEFT} %{F#\${COLOR_ADDR_FG}} %{A:echo -n "\${w_ex_addr}" \| xclip:}\${w_ex_addr}%{A}  %{A:echo -n "\${w_addr_m[wlan0]}" \| xclip:}\${w_addr_m[wlan0]}%{A} %{F#\${COLOR_ADDR_BG} B-}\${DELIM_LEFT}%{F-}%{r}%{F#\${COLOR_STATS_BG} B-}\${DELIM_RIGHT}%{F#\${COLOR_STATS_FG} B#\${COLOR_STATS_BG}} \${w_battery_status_m[BAT0]} \${w_battery_perc_m[BAT0]} 力 \${w_fs_used_perc_m[/]}   \${w_memory_used} ﬙ \${w_la_1m}  \${w_sensors_core} %{F#\${COLOR_DATE_D_BG} B#\${COLOR_STATS_BG}}\${DELIM_RIGHT}%{F#\${COLOR_DATE_D_FG} B#\${COLOR_DATE_D_BG}}  \${w_date_d} %{F#\${COLOR_DATE_T_BG} B#\${COLOR_DATE_D_BG}}\${DELIM_RIGHT}%{F#\${COLOR_DATE_T_FG} B#\${COLOR_DATE_T_BG}}  \${w_date_t} %{F- B-}"
+  TEMPLATE_eDP=${TEMPLATE}
+  TEMPLATE_DisplayPort_0=${TEMPLATE//eDP/DisplayPort-0}
+  TEMPLATE_DisplayPort_1=${TEMPLATE//eDP/DisplayPort-1}
+  TEMPLATE_DisplayPort_2=${TEMPLATE//eDP/DisplayPort-2}
+  TEMPLATE_DisplayPort_3=${TEMPLATE//eDP/DisplayPort-3}
+  TEMPLATE_DisplayPort_4=${TEMPLATE//eDP/DisplayPort-4}
+  TEMPLATE_HDMI_A_0=${TEMPLATE//eDP/HDMI-A-0}
+fi

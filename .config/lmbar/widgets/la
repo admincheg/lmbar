@@ -1,0 +1,34 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["L"]="la.parse"
+
+w_la_1m=0
+w_la_5m=0
+w_la_15m=0
+
+la.parse() {
+  data=$1; shift
+  [[ ${DEBUG} -eq 1 ]] && echo "Got data '${data}' for la widget" >&2
+  read w_la_1m w_la_5m w_la_15 <<< ${data}
+}
+
+la.run() {
+  while :; do
+    awk '{print "L"$1,$2,$3}' < /proc/loadavg > "${FIFO_PIPE}"
+    sleep 5
+  done
+}
+
+la.cleanup() {
+	return 0
+}

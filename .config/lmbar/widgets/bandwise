@@ -1,0 +1,71 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["B"]="bandwise.parse"
+
+declare -gA w_bandwise_diff_rx_m=()
+declare -gA w_bandwise_diff_tx_m=()
+declare -gA w_bandwise_bytes_rx_m=()
+declare -gA w_bandwise_bytes_tx_m=()
+
+mult=1
+case $BANDWISE_MULT in
+  [Kk])
+    mult=128
+    ;;
+  [Mm])
+    mult=$((128 * 1024))
+    ;;
+  [Gg])
+    mult=$((128 * 1024 * 1024))
+    ;;
+esac
+
+bandwise.diff() {
+  local cur=$1; shift
+  local prev=$1; shift
+  local mult=$1; shift
+
+  bc <<< "scale=2;($cur - $prev) / $mult" | awk '{printf "%.2f", $0}'
+}
+
+bandwise.parse() {
+  data=$1; shift
+  w_addr=""
+  [[ ${DEBUG} -eq 1 ]] && echo "Got data '${data}' for bandwise widget" >&2
+  while IFS=: read iface rx_c tx_c; do
+    [[ -z ${iface} ]] && continue
+    [[ -z ${w_bandwise_bytes_rx_m[$iface]} ]] && w_bandwise_bytes_rx_m[$iface]=$rx_c
+    [[ -z ${w_bandwise_bytes_tx_m[$iface]} ]] && w_bandwise_bytes_tx_m[$iface]=$tx_c
+    w_bandwise_diff_rx_m[$iface]=$(bandwise.diff $rx_c ${w_bandwise_bytes_rx_m[$iface]} $mult)
+    w_bandwise_diff_tx_m[$iface]=$(bandwise.diff $tx_c ${w_bandwise_bytes_tx_m[$iface]} $mult)
+    w_bandwise_bytes_rx_m[$iface]=$rx_c
+    w_bandwise_bytes_tx_m[$iface]=$tx_c
+  done < <(echo ${data} | sed 's/|/\n/g')
+}
+
+bandwise.run() {
+  if [[ ${#IFNAMES[@]} -eq 0 ]]; then
+    echo "Bandwise module not initialized, because interfaces list is empty" >&2
+  fi
+
+  while :; do
+    ret="B"
+    while read iface rx_c _ _ _ _ _ _ _ tx_c _; do
+      if [[ ${IFNAMES[@]} == *${iface::-1}* ]]; then
+        ret="${ret}${iface::-1}:${rx_c}:${tx_c}|"
+      fi
+    done < /proc/net/dev
+    echo $ret > "${FIFO_PIPE}"
+    sleep 1
+  done
+}

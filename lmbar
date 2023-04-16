@@ -1,0 +1,167 @@
+#!/bin/bash
+
+CONFIG_PATH="${HOME}/.config/lmbar"
+CONFIG="${CONFIG_PATH}/config"
+WIDGET_PATH="${CONFIG_PATH}/widgets"
+if [[ ! -f "${CONFIG}" ]]; then
+  echo "Config file ${CONFIG} not found"
+  exit 1
+fi
+
+lmbar.log() {
+  [[ ${DEBUG} -eq 1 ]] && echo "$@" >> /tmp/lmlog
+}
+
+. ${CONFIG}
+
+declare -A REGISTERED_WIDGETS=()
+declare -A _WIDGETS=()
+FIFO_PIPE="${FIFO_PIPE:=/tmp/lemonbar}"
+DEBUG="${DEBUG:=0}"
+
+lmbar.log "Config loaded"
+
+lmbar.xdo() {
+  until bar_id=$(xdo id -a "lemonbar"); do
+    sleep 1
+  done
+
+  xdo below -t $(xdo id -n root) $bar_id
+  lmbar.log "XDO hack applied"
+}
+
+lmbar.widgets.init() {
+  _WIDGETS=()
+
+  for widget in ${WIDGETS[@]}; do
+    if [[ -f "${WIDGET_PATH}/${widget}" ]]; then
+      . "${WIDGET_PATH}/${widget}"
+      _WIDGETS[${widget}]=0
+      lmbar.log "Widget ${widget} loaded"
+    else
+      echo "Widget ${widget} not found and not loaded" >&2
+    fi
+  done
+}
+
+lmbar.widgets.stop() {
+  lmbar.log "Stopping widgets ${_WIDGETS[@]}"
+
+  for w in ${!_WIDGETS[@]}; do
+	cmd="${w}.cleanup"
+
+	type ${cmd} 2>&1 > /dev/null
+	[[ $? -eq 0 ]] && ${cmd} ${_WIDGETS[${w}]}
+
+	lmbar.log "Kill child processes of ${w}"
+	pkill -P ${_WIDGETS[${w}]} sleep
+	lmbar.log "Stop ${w} widget"
+	kill ${_WIDGETS[${w}]} 2>&1 > /dev/null
+  done
+  _WIDGETS=()
+}
+
+lmbar.widgets.run() {
+  for widget in ${!_WIDGETS[@]}; do
+    run="${widget}.run"
+	set +m; { ${run} & } 2>/dev/null
+    lmbar.log "Widget ${widget} started in backgound with PID $!"
+    _WIDGETS[${widget}]=$!
+  done
+}
+
+lmbar.run() {
+  if [[ ! -p "${FIFO_PIPE}" ]]; then
+    rm -f "${FIFO_PIPE}"
+    mkfifo ${FIFO_PIPE}
+    lmbar.log "Pipe ${FIFO_PIPE} reinitialized"
+  fi
+
+  trap 'trap - TERM; kill 0' INT TERM QUIT EXIT
+
+  lmbar.widgets.init
+  lmbar.widgets.run
+
+  # Dirty hack for passing race condition (xdo should be setted after lemonbar start)
+  lmbar.xdo &
+
+  lmbar.log "Ready for showtime!"
+  while read -r line; do
+    [[ -z ${line} ]] && continue
+
+    widget=${line::1}
+    if [[ ${widget} == "Q" ]]; then
+	  exit
+      lmbar.widgets.stop
+      break;
+    fi
+
+    if [[ ${widget} == "Z" ]]; then
+      REGISTERED_WIDGETS=()
+
+      lmbar.widgets.stop
+
+      . ${CONFIG}
+
+      lmbar.widgets.init
+      lmbar.widgets.run
+      continue
+    fi
+
+    if [[ -n ${REGISTERED_WIDGETS[${widget}]} ]]; then
+      cmd=${REGISTERED_WIDGETS[${widget}]}
+      ${cmd} "${line:1}"
+    else
+      echo "Unknown widget: $line" >&2
+    fi
+
+    if [[ ${#MONITORS[@]} -lt 2 ]]; then
+      eval echo "${TEMPLATE}"
+    else
+      ret=""
+      i=0
+      for mon in ${MONITORS[@]}; do
+        tpl="TEMPLATE_${mon//-/_}"
+        [[ -z ${!tpl} ]] && tpl="TEMPLATE"
+        ret="${ret}%{S${i}}%{l}$(eval echo \"${!tpl}\")"
+        i=$((i + 1))
+      done
+
+      echo "$ret"
+    fi
+  done <> ${FIFO_PIPE} | lemonbar \
+    -B '#33000000' \
+    -o -3 \
+    -f 'TerminessTTF Nerd Font:size=12' \
+    -o 0 \
+    -f 'TerminessTTF Nerd Font:size=16' \
+    -n 'lemonbar' \
+    -g x22 \
+    -u 2 \
+    | bash
+}
+
+case "$1" in
+run)
+  if [[ "$2" == "-b" ]]; then
+    lmbar.run &
+  else
+    lmbar.run
+  fi
+  ;;
+stop)
+  echo "Q" > ${FIFO_PIPE}
+  ;;
+reload)
+  echo "Z" > ${FIFO_PIPE}
+  ;;
+prefixes)
+  lmbar.widgets.init
+
+  echo "Z -> (non-widget) Reload config"
+  echo "Q -> (non-widget) Shutdown application"
+
+  for i in ${!REGISTERED_WIDGETS[@]}; do
+    echo "${i} ->     (widget) ${REGISTERED_WIDGETS[$i]}"
+  done
+esac

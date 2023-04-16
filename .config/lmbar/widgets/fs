@@ -1,0 +1,47 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["F"]="fs.parse"
+
+declare -gA w_fs_size_m=()
+declare -gA w_fs_used_m=()
+declare -gA w_fs_avail_m=()
+declare -gA w_fs_used_perc_m=()
+
+fs.parse() {
+  data=$1; shift
+  [[ ${DEBUG} -eq 1 ]] && echo "Got data '${data}' for fs widget" >&2
+  while read line; do
+    [[ -z ${line} ]] && continue
+    IFS=" " read mnt size used avail used_perc <<< $line
+    w_fs_size_m[$mnt]=$size
+    w_fs_used_m[$mnt]=$used
+    w_fs_avail_m[$mnt]=$avail
+    w_fs_used_perc_m[$mnt]=$used_perc
+  done < <(echo $data | sed 's/|/\n/g')
+}
+
+fs.run() {
+  if [[ ${#FS[@]} -lt 0 ]]; then
+    echo "Addr not initialized, because interfaces list is empty" >&2
+    return
+  fi
+
+  while :; do
+    ret="F"
+    while read _ size used avail used_perc mnt _; do
+      [[ ${FS[@]} == *${mnt}* ]] && ret="${ret}${mnt} ${size} ${used} ${avail} ${used_perc}|"
+    done < <(df -h)
+    [[ ${ret} == "F" ]] || echo $ret > "${FIFO_PIPE}"
+    sleep 60
+  done
+}

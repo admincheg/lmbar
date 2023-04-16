@@ -1,0 +1,73 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["W"]="bspwm.parse"
+
+w_bspwm_title=""
+declare -gA w_bspwm_title_m=()
+declare -gA w_bspwm_desks_m=()
+
+bspwm.get_title() {
+  local id=$(bspc query -N -d focused -n .focused.window)
+  if [[ -n "${id}" ]]; then
+    IFS='"' read _ title _ < <(xprop -id "${id}" WM_NAME)
+    echo $title
+  fi
+}
+
+bspwm.parse() {
+  local data=$1; shift
+  local monitor=""
+  local _desk_active="${BSPWM_DESKS_ACTIVE:=ﱣ}"
+  local _desk_inactive="${BSPWM_DESKS_INACTIVE:=}"
+  local _desk_delim="${BSPWM_DESKS_DELIM:=}"
+  local _desk_inactive_colors="%{F#${COLOR_BSPWM_DESKS_ACTIVE} B#${COLOR_BSPWM_DESKS_INACTIVE}}"
+  local _desk_active_colors="%{F#${COLOR_BSPWM_DESKS_INACTIVE} B#${COLOR_BSPWM_DESKS_ACTIVE}}"
+
+  [[ ${DEBUG} -eq 1 ]] && echo "Got data '${data}' for bspwm widget" >&2
+  w_bspwm_title=$(bspwm.get_title)
+  while read line; do
+    local IFS=":"
+    local _desks="${_desk_inactive_colors} "
+
+    set -- ${line}
+    while [ $# -gt 0 ]; do
+      item=$1
+      name=${item#?}
+      case $item in
+        [Mm]*)
+          monitor=${name}
+          [[ ${item::1} == 'M' ]] && w_bspwm_title_m[$monitor]=${w_bspwm_title::32}
+          ;;
+        [fou]*)
+          _desks="${_desks}${_desk_inactive_colors} ${_desk_inactive} "
+          ;;
+        [FOU]*)
+          _desks="${_desks}${_desk_active_colors}${_desk_delim} ${_desk_active} ${_desk_inactive_colors}${_desk_delim}"
+          ;;
+      esac
+      shift
+    done
+
+    w_bspwm_desks_m[$monitor]="${_desks}%{F- B-}"
+  done < <(echo $data | sed "s/:\([mM]\)/\n\1/g")
+}
+
+bspwm.cleanup() {
+  local ppid=$1; shift
+  [[ ${DEBUG} -eq 1 ]] && echo "Try to stop bspc with ppid ${ppid}" >&2
+  pkill -P ${ppid} bspc
+}
+
+bspwm.run() {
+  bspc subscribe > "${FIFO_PIPE}"
+}

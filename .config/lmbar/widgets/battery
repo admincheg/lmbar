@@ -1,0 +1,71 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["C"]="battery.parse"
+
+declare -gA w_battery_perc_m=()
+declare -gA w_battery_status_m=()
+
+battery.parse() {
+  data=$1; shift
+  local s_low=""
+  local s_charge=""
+  local s_full=""
+  local s_discharge=""
+  local s_unknown=""
+  [[ ${DEBUG} -eq 1 ]] && echo "Got data '${data}' for battery widget" >&2
+
+  while read line; do
+    [[ -z ${line} ]] && continue
+	IFS=: read name status capacity <<< ${line}
+
+    case "$status" in
+      "Full")
+        w_battery_status_m[$name]="$s_full"
+        ;;
+      "Charging")
+        w_battery_status_m[$name]="$s_charge"
+        ;;
+      "Discharging")
+        if [[ $capacity -lt 20 ]]; then
+          w_battery_status_m[$name]="$s_low"
+        else
+          w_battery_status_m[$name]="$s_discharge"
+        fi
+        ;;
+      *)
+        w_battery_status_m[$name]="$s_unknown"
+        ;;
+    esac
+	w_battery_perc_m[$name]="${capacity}"
+  done < <(echo $data | sed 's/|/\n/g')
+
+}
+
+battery.run() {
+  while :; do
+	ret="C"
+	for i in /sys/class/power_supply/*; do
+	  name=${i##*/}
+	  if [[ ${name} == BAT* ]]; then
+		status=$(<"${i}/status")
+        capacity=$(<"${i}/capacity")
+
+
+		ret="${ret}${name}:${status}:${capacity}|"
+	  fi
+	done
+
+	echo ${ret} > ${FIFO_PIPE}
+    sleep 10
+  done
+}

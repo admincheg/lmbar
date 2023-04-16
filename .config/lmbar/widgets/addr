@@ -1,0 +1,41 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["A"]="addr.parse"
+
+declare -gA w_addr_m=()
+
+addr.parse() {
+  data=$1; shift
+  [[ ${DEBUG} -eq 1 ]] && echo "Got data '${data}' for addr widget" >&2
+  while IFS=: read iface addr; do
+    [[ -z ${iface} ]] && continue
+    w_addr_m[$iface]=${addr}
+  done < <(echo ${data} | sed 's/|/\n/g')
+}
+
+addr.run() {
+  if [[ ${#IFNAMES[@]} -eq 0 ]]; then
+    echo "Addr not initialized, because interfaces list is empty" >&2
+    return
+  fi
+  while :; do
+    ret="A"
+    while read iface status addr _; do
+      if [[ ${IFNAMES[@]} == *${iface}* ]]; then
+        ret="${ret}${iface}:${addr}|"
+      fi
+    done < <(ip -br a show)
+    echo $ret > "${FIFO_PIPE}"
+    sleep 60
+  done
+}

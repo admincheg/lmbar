@@ -1,0 +1,29 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["D"]="date.parse"
+
+w_date_d=""
+w_date_t=""
+
+date.parse() {
+  data=$1; shift
+  [[ ${DEBUG} -eq 1 ]] && echo "Got data '${data}' for date widget" >&2
+  IFS=" " read w_date_d w_date_t <<< ${data}
+}
+
+date.run() {
+  while :; do
+    date +"D%d.%m.%y %H:%M" > "${FIFO_PIPE}"
+    sleep 10
+  done
+}

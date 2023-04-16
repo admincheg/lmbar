@@ -1,0 +1,30 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["M"]="memory.parse"
+
+w_memory_total=""
+w_memory_used=""
+w_memory_free=""
+
+memory.parse() {
+  data=$1; shift
+  [[ ${DEBUG} -eq 1 ]] && echo "Got data '${data}' for memory widget" >&2
+  read w_memory_total w_memory_used w_memory_free <<< ${data}
+}
+
+memory.run() {
+  while :; do
+    free -h | awk '/Mem:/ {print "M"$2,$3,$4}' > "${FIFO_PIPE}"
+    sleep 10
+  done
+}

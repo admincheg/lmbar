@@ -1,0 +1,47 @@
+#!/bin/bash
+
+if [[ -z ${FIFO_PIPE} ]]; then
+  echo "FIFO_PIPE isn't defined, exit"
+  exit 2
+fi
+
+if [[ ! -p ${FIFO_PIPE} ]]; then
+  echo "FIFO pipe broken, please check it again!"
+  exit 2
+fi
+
+REGISTERED_WIDGETS["S"]="sensors.parse"
+
+sensors_core_drv='none'
+w_sensors_core=""
+
+sensors.parse() {
+  data=$1; shift
+  [[ ${DEBUG} -eq 1 ]] && echo "Got data '${data}' for sensors widget" >&2
+  read w_sensors_core <<< ${data}
+}
+
+sensors.detect() {
+  if [[ $(grep -c 'model name.*AMD' /proc/cpuinfo) -gt 0 ]]; then
+    sensors_core_drv="amd"
+  elif [[ $(grep -c 'model name.*Intel' /proc/cpuinfo) -gt 0 ]]; then
+    sensors_core_drv="intel"
+  fi
+}
+
+sensors.run() {
+  local core=""
+
+  while :; do
+    if [[ ${sensors_core_drv} == "amd" ]]; then
+      core=$(sensors | awk '/Tdie|CPU/ {print $2}')
+    elif [[ ${sensors_core_drv} == "intel" ]]; then
+      core=$(sensors | awk '/Package/ {print $4}')
+    fi
+
+    [[ ${sensors_core_drv} != "none" ]] && echo "S${core}" > "${FIFO_PIPE}"
+    sleep 1
+  done
+}
+
+sensors.detect
